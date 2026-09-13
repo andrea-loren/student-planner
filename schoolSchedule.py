@@ -319,7 +319,7 @@ with tab1:
                         text_color = "#121212"
 
                     # Button styled cleanly using native Streamlit full-width layout
-                    btn_text = f"{period_label} | {status_display}"
+                    btn_text = f"{status_display}"
                     if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
                         edit_free_period_modal(block_key, period_time)
 
