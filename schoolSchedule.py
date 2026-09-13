@@ -310,7 +310,7 @@ with tab1:
 
                 if class_name == "Free Period" and c_day:
                     if is_blocked:
-                        status_display = f"🔒 {custom_note}" if custom_note else "🔒 Meeting / Busy"
+                        status_display = f"🚫 {custom_note}" if custom_note else "🚫 Meeting / Busy"
                         card_color = "#757575"
                         text_color = "#FFFFFF"
                     else:
