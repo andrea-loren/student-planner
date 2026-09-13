@@ -266,7 +266,25 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers
+    # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
+    
+    # Dialog for editing free periods cleanly without breaking block styling
+    @st.dialog("Edit Free Period Activity")
+    def edit_free_period_modal(block_key, period_time):
+        is_blocked = st.session_state.blocked_periods.get(block_key, False)
+        custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
+        
+        st.write(f"**Period:** {period_time}")
+        
+        new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"dlg_tog_{block_key}")
+        new_note = st.text_input("What are you doing during this time?", value=custom_note, placeholder="e.g., SAT Prep, Math Tutoring", key=f"dlg_inp_{block_key}")
+        
+        if st.button("Save Changes", type="primary", use_container_width=True):
+            st.session_state.blocked_periods[block_key] = new_blocked
+            st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
+            save_config()
+            st.rerun()
+
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -293,26 +311,17 @@ with tab1:
                 if class_name == "Free Period" and c_day:
                     if is_blocked:
                         status_display = f"🔒 {custom_note}" if custom_note else "🔒 Meeting / Busy"
+                        card_color = "#757575"
+                        text_color = "#FFFFFF"
                     else:
                         status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
+                        card_color = bg_color
+                        text_color = "#121212"
 
-                    # Single clean popover button with matching label structure
-                    pop_label = f"{period_label}\n{status_display}"
-                    
-                    with st.popover(pop_label, use_container_width=True):
-                        st.markdown(f"**Edit Free Period ({period_time})**")
-                        
-                        new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"tog_{block_key}")
-                        if new_blocked != is_blocked:
-                            st.session_state.blocked_periods[block_key] = new_blocked
-                            save_config()
-                            st.rerun()
-
-                        new_note = st.text_input("What are you doing?", value=custom_note, placeholder="e.g. SAT Prep, Tutoring", key=f"inp_{block_key}")
-                        if new_note != custom_note:
-                            st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
-                            save_config()
-                            st.rerun()
+                    # Button styled cleanly using native Streamlit full-width layout
+                    btn_text = f"✏️ {period_label} — {status_display}"
+                    if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
+                        edit_free_period_modal(block_key, period_time)
 
                 else:
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
