@@ -266,32 +266,41 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
+    # ROW 2: Classes & Room Numbers (Zero-Gap Alignment & Edit Dialog)
     
-    # CSS to force button containers to match the exact spacing of HTML cards
+    # CSS to collapse all Streamlit widget wrapper gaps inside the schedule grid
     st.markdown("""
         <style>
-        /* Remove Streamlit's default container gap around buttons */
-        div[data-testid="stColumn"] div[data-testid="stElementContainer"]:has(div[data-testid="stButton"]) {
-            margin-bottom: 0px !important;
-            padding-bottom: 0px !important;
+        /* Target the vertical block gaps inside schedule columns */
+        div[data-testid="stColumn"] div[data-testid="stVerticalBlock"] {
+            gap: 0rem !important;
+        }
+        /* Lock button wrapper height and bottom margin */
+        div[data-testid="stColumn"] div[data-testid="stElementContainer"] {
+            margin-bottom: 6px !important;
         }
         div[data-testid="stButton"] {
-            margin-bottom: 6px !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         div[data-testid="stButton"] > button {
             border-radius: 5px !important;
-            padding: 6px !important;
+            padding: 4px 6px !important;
             margin: 0 !important;
             border: 1px solid #ddd !important;
-            min-height: 48px !important;
             height: 48px !important;
+            min-height: 48px !important;
+            max-height: 48px !important;
             line-height: 1.2 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # Dialog for editing free periods cleanly without breaking block styling
+    # Dialog for editing free periods cleanly
     @st.dialog("Edit Free Period Activity")
     def edit_free_period_modal(block_key, period_time):
         is_blocked = st.session_state.blocked_periods.get(block_key, False)
@@ -347,8 +356,9 @@ with tab1:
                     text_color = "#FFFFFF" if is_blocked else "#121212"
                     
                     st.markdown(
-                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; height:48px; box-sizing:border-box;'>"
-                        f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; height:48px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; align-items:center;'>"
+                        f"<small style='font-weight:normal; font-size:10px; line-height:1;'>{period_label}</small>"
+                        f"<span style='line-height:1.2;'>{display_text}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
