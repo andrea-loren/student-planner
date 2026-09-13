@@ -251,7 +251,15 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers
+    # ROW 2: Classes & Room Numbers (Perfectly Aligned & Clickable)
+    # Check if a free period was clicked via query param
+    query_params = st.query_params
+    if "toggle_block" in query_params:
+        target_block = query_params["toggle_block"]
+        toggle_block(target_block)
+        st.query_params.clear()
+        st.rerun()
+
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -275,12 +283,20 @@ with tab1:
                 if class_name == "Free Period" and c_day:
                     period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
                     status_text = "🔒 Meeting / Busy" if is_blocked else "🟢 Free Period"
+                    card_color = "#757575" if is_blocked else bg_color
+                    text_color = "#FFFFFF" if is_blocked else "#121212"
                     
-                    button_label = f"{period_label}\n{status_text}"
-                    
-                    if st.button(button_label, key=f"btn_free_{block_key}", use_container_width=True):
-                        toggle_block(block_key)
-                        st.rerun()
+                    # Clickable Card styled EXACTLY like regular cards
+                    st.markdown(
+                        f"""
+                        <a href="?toggle_block={block_key}" target="_self" style="text-decoration: none; color: inherit;">
+                            <div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; cursor:pointer;'>
+                                <small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{status_text}
+                            </div>
+                        </a>
+                        """,
+                        unsafe_allow_html=True
+                    )
                 else:
                     period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
