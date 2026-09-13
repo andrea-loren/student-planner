@@ -266,56 +266,32 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Zero-Gap Alignment & Edit Dialog)
+    # ROW 2: Classes & Room Numbers
     
-    # CSS to collapse all Streamlit widget wrapper gaps inside the schedule grid
-    st.markdown("""
-        <style>
-        /* Target the vertical block gaps inside schedule columns */
-        div[data-testid="stColumn"] div[data-testid="stVerticalBlock"] {
-            gap: 0rem !important;
-        }
-        /* Lock button wrapper height and bottom margin */
-        div[data-testid="stColumn"] div[data-testid="stElementContainer"] {
-            margin-bottom: 6px !important;
-        }
-        div[data-testid="stButton"] {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        div[data-testid="stButton"] > button {
-            border-radius: 5px !important;
-            padding: 4px 6px !important;
-            margin: 0 !important;
-            border: 1px solid #ddd !important;
-            height: 48px !important;
-            min-height: 48px !important;
-            max-height: 48px !important;
-            line-height: 1.2 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            align-items: center !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # Check if a Free Period card was clicked via query params
+    if "clicked_fp" in st.query_params:
+        fp_key = st.query_params["clicked_fp"]
+        st.query_params.clear()
+        
+        # Open edit modal for the clicked free period
+        @st.dialog("Edit Free Period Activity")
+        def edit_free_period_modal(block_key):
+            is_blocked = st.session_state.blocked_periods.get(block_key, False)
+            custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
+            
+            p_time = block_key.split("_")[-1]
+            st.write(f"**Period:** {p_time}")
+            
+            new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"dlg_tog_{block_key}")
+            new_note = st.text_input("What are you doing during this time?", value=custom_note, placeholder="e.g., SAT Prep, Math Tutoring", key=f"dlg_inp_{block_key}")
+            
+            if st.button("Save Changes", type="primary", use_container_width=True):
+                st.session_state.blocked_periods[block_key] = new_blocked
+                st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
+                save_config()
+                st.rerun()
 
-    # Dialog for editing free periods cleanly
-    @st.dialog("Edit Free Period Activity")
-    def edit_free_period_modal(block_key, period_time):
-        is_blocked = st.session_state.blocked_periods.get(block_key, False)
-        custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
-        
-        st.write(f"**Period:** {period_time}")
-        
-        new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"dlg_tog_{block_key}")
-        new_note = st.text_input("What are you doing during this time?", value=custom_note, placeholder="e.g., SAT Prep, Math Tutoring", key=f"dlg_inp_{block_key}")
-        
-        if st.button("Save Changes", type="primary", use_container_width=True):
-            st.session_state.blocked_periods[block_key] = new_blocked
-            st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
-            save_config()
-            st.rerun()
+        edit_free_period_modal(fp_key)
 
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
@@ -343,12 +319,22 @@ with tab1:
                 if class_name == "Free Period" and c_day:
                     if is_blocked:
                         status_display = f"🚫 {custom_note}" if custom_note else "🚫 Meeting / Busy"
+                        card_color = "#757575"
+                        text_color = "#FFFFFF"
                     else:
                         status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
+                        card_color = bg_color
+                        text_color = "#121212"
 
-                    btn_text = f"{period_label}\n{status_display}"
-                    if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
-                        edit_free_period_modal(block_key, period_time)
+                    # HTML Button styled identically to standard class cards
+                    st.markdown(
+                        f"<a href='?clicked_fp={block_key}' target='_self' style='text-decoration:none; color:inherit; display:block;'>"
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; cursor:pointer;'>"
+                        f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{status_display}"
+                        f"</div>"
+                        f"</a>",
+                        unsafe_allow_html=True
+                    )
 
                 else:
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
@@ -356,9 +342,8 @@ with tab1:
                     text_color = "#FFFFFF" if is_blocked else "#121212"
                     
                     st.markdown(
-                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; height:48px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; align-items:center;'>"
-                        f"<small style='font-weight:normal; font-size:10px; line-height:1;'>{period_label}</small>"
-                        f"<span style='line-height:1.2;'>{display_text}</span>"
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
+                        f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
                         f"</div>",
                         unsafe_allow_html=True
                     )
