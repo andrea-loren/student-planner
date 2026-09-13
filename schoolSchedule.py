@@ -235,7 +235,23 @@ with tab1:
 
     st.markdown("---")
 
-    # ROW 2: Classes & Room Numbers (Styled Clickable Free Periods)
+    # Inject global button styling so free period buttons match class cards exactly
+    st.markdown("""
+        <style>
+        div[data-testid="stButton"] > button {
+            width: 100% !important;
+            border-radius: 5px !important;
+            padding: 6px !important;
+            margin-bottom: 6px !important;
+            text-align: center !important;
+            border: 1px solid #ddd !important;
+            min-height: 48px !important;
+            line-height: 1.2 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # ROW 2: Classes & Room Numbers
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -260,7 +276,6 @@ with tab1:
                     period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
                     status_text = "🔒 Meeting / Busy" if is_blocked else "🟢 Free Period"
                     
-                    # Styled label: top line in smaller text, bottom line bolded
                     button_label = f"{period_label}\n{status_text}"
                     
                     if st.button(button_label, key=f"btn_free_{block_key}", use_container_width=True):
