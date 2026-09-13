@@ -251,15 +251,7 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Perfectly Aligned & Clickable)
-    # Check if a free period was clicked via query param
-    query_params = st.query_params
-    if "toggle_block" in query_params:
-        target_block = query_params["toggle_block"]
-        toggle_block(target_block)
-        st.query_params.clear()
-        st.rerun()
-
+    # ROW 2: Classes & Room Numbers (Interactive Popovers - No Reloads!)
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -279,24 +271,34 @@ with tab1:
                 
                 block_key = f"{date_str}_{period_time}"
                 is_blocked = st.session_state.blocked_periods.get(block_key, False)
+                custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
                 
                 if class_name == "Free Period" and c_day:
                     period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
-                    status_text = "🔒 Meeting / Busy" if is_blocked else "🟢 Free Period"
-                    card_color = "#757575" if is_blocked else bg_color
-                    text_color = "#FFFFFF" if is_blocked else "#121212"
                     
-                    # Clickable Card styled EXACTLY like regular cards
-                    st.markdown(
-                        f"""
-                        <a href="?toggle_block={block_key}" target="_self" style="text-decoration: none; color: inherit;">
-                            <div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; cursor:pointer;'>
-                                <small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{status_text}
-                            </div>
-                        </a>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                    if is_blocked:
+                        status_display = f"🔒 {custom_note}" if custom_note else "🔒 Meeting / Busy"
+                    else:
+                        status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
+
+                    # Popover container keeps everything inline without hard page reloads
+                    with st.popover(f"{period_label}\n{status_display}", use_container_width=True):
+                        st.markdown(f"**Edit Free Period ({period_time})**")
+                        
+                        # Toggle state switch
+                        new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"tog_{block_key}")
+                        if new_blocked != is_blocked:
+                            st.session_state.blocked_periods[block_key] = new_blocked
+                            save_config()
+                            st.rerun()
+
+                        # Custom note text box
+                        new_note = st.text_input("What are you doing?", value=custom_note, placeholder="e.g. SAT Prep, Tutoring", key=f"inp_{block_key}")
+                        if new_note != custom_note:
+                            st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
+                            save_config()
+                            st.rerun()
+
                 else:
                     period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
