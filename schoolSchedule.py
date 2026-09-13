@@ -63,6 +63,17 @@ DEFAULT_ROOMS = {
     "14:00 - 14:56": ["322", "322", "322", "101", "Art Room", "322"]
 }
 
+DEFAULT_SCHOOL_START = "2026-09-10"
+DEFAULT_SCHOOL_END = "2027-06-04"
+DEFAULT_CYCLE_DAYS = 6
+DEFAULT_CUSTOM_BREAKS = [
+    "2026-10-09", "2026-10-12",
+    "2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27",
+    "2026-12-21", "2026-12-22", "2026-12-23", "2026-12-24", "2026-12-25", "2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01",
+    "2027-02-12", "2027-02-13", "2027-02-14", "2027-02-15", "2027-02-16",
+    "2027-03-15", "2027-03-16", "2027-03-17", "2027-03-18", "2027-03-19", "2027-03-22", "2027-03-23", "2027-03-24", "2027-03-25", "2027-03-26"
+]
+
 # --- LOAD CONFIG & SESSION STATE ---
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, "r") as f:
@@ -75,6 +86,10 @@ if os.path.exists(CONFIG_FILE):
         st.session_state.daily_notes = config.get("daily_notes", {})
         st.session_state.grades = config.get("grades", {})
         st.session_state.grade_weights = config.get("grade_weights", {})
+        st.session_state.school_start_date = config.get("school_start_date", DEFAULT_SCHOOL_START)
+        st.session_state.school_end_date = config.get("school_end_date", DEFAULT_SCHOOL_END)
+        st.session_state.cycle_days_count = config.get("cycle_days_count", DEFAULT_CYCLE_DAYS)
+        st.session_state.custom_breaks = config.get("custom_breaks", DEFAULT_CUSTOM_BREAKS)
 else:
     st.session_state.classes = DEFAULT_CLASSES
     st.session_state.colors = DEFAULT_COLORS
@@ -84,6 +99,10 @@ else:
     st.session_state.daily_notes = {}
     st.session_state.grades = {}
     st.session_state.grade_weights = {}
+    st.session_state.school_start_date = DEFAULT_SCHOOL_START
+    st.session_state.school_end_date = DEFAULT_SCHOOL_END
+    st.session_state.cycle_days_count = DEFAULT_CYCLE_DAYS
+    st.session_state.custom_breaks = DEFAULT_CUSTOM_BREAKS
 
 if "tasks" not in st.session_state:
     if os.path.exists(TASKS_FILE):
@@ -107,36 +126,26 @@ def save_config():
             "blocked_periods": st.session_state.blocked_periods,
             "daily_notes": st.session_state.daily_notes,
             "grades": st.session_state.get("grades", {}),
-            "grade_weights": st.session_state.get("grade_weights", {})
+            "grade_weights": st.session_state.get("grade_weights", {}),
+            "school_start_date": st.session_state.school_start_date,
+            "school_end_date": st.session_state.school_end_date,
+            "cycle_days_count": st.session_state.cycle_days_count,
+            "custom_breaks": st.session_state.custom_breaks
         }, f, indent=4)
 
 def save_tasks():
     st.session_state.tasks.to_csv(TASKS_FILE, index=False)
 
-def toggle_block(block_key):
-    current = st.session_state.blocked_periods.get(block_key, False)
-    st.session_state.blocked_periods[block_key] = not current
-    save_config()
+def parse_date(d_str):
+    if isinstance(d_str, date):
+        return d_str
+    return datetime.strptime(d_str, "%Y-%m-%d").date()
 
-# --- SCHEDULED BREAKS & END DATE DEFINITION ---
-def d_range(start_date, end_date):
-    curr = start_date
-    dates = set()
-    while curr <= end_date:
-        dates.add(curr)
-        curr += timedelta(days=1)
-    return dates
-
-SCHOOL_BREAKS = set()
-SCHOOL_BREAKS.add(date(2026, 10, 9))
-SCHOOL_BREAKS.add(date(2026, 10, 12))
-SCHOOL_BREAKS.update(d_range(date(2026, 11, 23), date(2026, 11, 30)))
-SCHOOL_BREAKS.update(d_range(date(2026, 12, 21), date(2027, 1, 1)))
-SCHOOL_BREAKS.update(d_range(date(2027, 2, 12), date(2027, 2, 16)))
-SCHOOL_BREAKS.update(d_range(date(2027, 3, 15), date(2027, 3, 29)))
-
-ANCHOR_DATE = date(2026, 9, 10)
-SCHOOL_END_DATE = date(2027, 6, 4)
+# Dynamic academic calendar resolution
+ANCHOR_DATE = parse_date(st.session_state.school_start_date)
+SCHOOL_END_DATE = parse_date(st.session_state.school_end_date)
+CYCLE_DAYS = int(st.session_state.cycle_days_count)
+SCHOOL_BREAKS = {parse_date(b) for b in st.session_state.custom_breaks}
 
 def is_school_day(check_date):
     if check_date.weekday() >= 5:
@@ -160,7 +169,7 @@ def get_cycle_day(target_date):
             school_days += 1
         current += timedelta(days=1)
         
-    return ((school_days - 1) % 6) + 1
+    return ((school_days - 1) % CYCLE_DAYS) + 1
 
 # --- HEADER & TABS ---
 st.title("🎓 Student Rotation Planner")
@@ -235,7 +244,6 @@ with tab1:
 
     st.markdown("---")
 
-    # Inject global button styling so free period buttons match class cards exactly
     # Inject CSS to make popover buttons look identical to class cards
     st.markdown("""
         <style>
@@ -267,8 +275,6 @@ with tab1:
     """, unsafe_allow_html=True)
 
     # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
-
-    # Dialog for editing free periods cleanly without breaking block styling
     @st.dialog("Edit Free Period Activity")
     def edit_free_period_modal(block_key, period_time):
         is_blocked = st.session_state.blocked_periods.get(block_key, False)
@@ -293,9 +299,10 @@ with tab1:
         with class_cols[idx]:
             st.markdown("#### 🗓️ Classes")
             for period_time, schedule in st.session_state.timetable.items():
-                if c_day:
+                if c_day and (c_day - 1) < len(schedule):
                     class_name = schedule[c_day - 1]
-                    room_no = st.session_state.rooms.get(period_time, [""]*6)[c_day - 1]
+                    rooms_list = st.session_state.rooms.get(period_time, [""] * CYCLE_DAYS)
+                    room_no = rooms_list[c_day - 1] if (c_day - 1) < len(rooms_list) else ""
                     bg_color = st.session_state.colors.get(class_name, "#FFFFFF")
                 else:
                     class_name = "No School"
@@ -317,7 +324,6 @@ with tab1:
                         card_color = bg_color
                         text_color = "#121212"
 
-                    # Button styled cleanly using native Streamlit full-width layout
                     btn_text = f"{status_display}"
                     if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
                         edit_free_period_modal(block_key, period_time)
@@ -418,7 +424,6 @@ with tab2:
                     st.info("No items in this list!")
                     return
 
-                # Sort: Pending items top, Completed items bottom
                 filtered["is_completed"] = filtered["Status"] == "Completed"
                 if sort_by == "Due Next":
                     filtered = filtered.sort_values(by=["is_completed", "Due Date"], ascending=[True, True])
@@ -526,16 +531,73 @@ with tab3:
 # --- TAB 4: CUSTOMIZE SCHEDULE ---
 with tab4:
     st.header("Schedule, Rooms & Color Configuration")
-    
-    # 0. CLASS NAME MANAGER
+
+    # 0. ACADEMIC CALENDAR & CYCLE CONFIGURATION
+    st.subheader("🗓️ Academic Calendar & Cycle Setup")
+    with st.expander("📅 Set School Year Dates, Cycle Length & Holidays", expanded=True):
+        cal_col1, cal_col2, cal_col3 = st.columns(3)
+        
+        cur_start = parse_date(st.session_state.school_start_date)
+        cur_end = parse_date(st.session_state.school_end_date)
+        
+        new_start = cal_col1.date_input("Start of School Year", value=cur_start)
+        new_end = cal_col2.date_input("End of School Year", value=cur_end)
+        new_cycle_days = cal_col3.number_input("Days in Cycle", min_value=1, max_value=14, value=int(st.session_state.cycle_days_count))
+
+        st.markdown("**Block Off Holidays & Breaks:**")
+        
+        # Holiday picker to easily block off days
+        selected_break_days = st.date_input(
+            "Select dates to add to Blocked School Breaks",
+            value=[],
+            key="break_picker"
+        )
+        
+        if st.button("➕ Add Selected Break Date(s)"):
+            if isinstance(selected_break_days, list):
+                dates_to_add = [d.strftime("%Y-%m-%d") for d in selected_break_days]
+            else:
+                dates_to_add = [selected_break_days.strftime("%Y-%m-%d")]
+                
+            updated_breaks = list(set(st.session_state.custom_breaks + dates_to_add))
+            st.session_state.custom_breaks = sorted(updated_breaks)
+            save_config()
+            st.success("Added break dates!")
+            st.rerun()
+
+        st.markdown("**Current Blocked Holidays / Breaks:**")
+        breaks_df = pd.DataFrame({"Date": st.session_state.custom_breaks})
+        
+        c_del_b, c_view_b = st.columns([0.4, 0.6])
+        with c_del_b:
+            remove_dates = st.multiselect("Select dates to remove:", st.session_state.custom_breaks)
+            if st.button("🗑️ Remove Selected Breaks"):
+                st.session_state.custom_breaks = [b for b in st.session_state.custom_breaks if b not in remove_dates]
+                save_config()
+                st.success("Removed selected break dates!")
+                st.rerun()
+
+        if st.button("💾 Save Academic Calendar Settings", type="primary"):
+            st.session_state.school_start_date = new_start.strftime("%Y-%m-%d")
+            st.session_state.school_end_date = new_end.strftime("%Y-%m-%d")
+            st.session_state.cycle_days_count = int(new_cycle_days)
+            save_config()
+            st.success("Academic Calendar Settings Saved!")
+            st.rerun()
+
+    st.markdown("---")
+
+    # 1. CLASS NAME MANAGER
     st.subheader("1. Class List Manager")
     with st.expander("✏️ Rename, Add, or Delete Classes"):
         st.markdown("**Rename Existing Classes:**")
         updated_classes = list(st.session_state.classes)
+        
         for i, c_name in enumerate(st.session_state.classes):
-            c1, c2 = st.columns([0.8, 0.2])
+            # Align button cleanly with text input by using vertical-alignment adjustment
+            c1, c2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
             new_name = c1.text_input(f"Class #{i+1}", value=c_name, key=f"rename_{i}")
-            if c2.button("Delete", key=f"del_class_{i}"):
+            if c2.button("Delete", key=f"del_class_{i}", use_container_width=True):
                 updated_classes.pop(i)
                 st.session_state.classes = updated_classes
                 save_config()
@@ -573,18 +635,20 @@ with tab4:
         st.success("Colors updated!")
 
     st.markdown("---")
-    st.subheader("3. Edit 6-Day Rotation Class Grid")
+    st.subheader(f"3. Edit {CYCLE_DAYS}-Day Rotation Class Grid")
     
     schedule_data = []
     for period, days in st.session_state.timetable.items():
-        schedule_data.append({"Time": period, **{f"Day {i+1}": days[i] for i in range(6)}})
+        # Ensure array matches cycle length
+        adjusted_days = (days + ["Free Period"] * CYCLE_DAYS)[:CYCLE_DAYS]
+        schedule_data.append({"Time": period, **{f"Day {i+1}": adjusted_days[i] for i in range(CYCLE_DAYS)}})
     
     sched_df = pd.DataFrame(schedule_data)
     edited_df = st.data_editor(
         sched_df,
         column_config={
             f"Day {i+1}": st.column_config.SelectboxColumn(options=st.session_state.classes)
-            for i in range(6)
+            for i in range(CYCLE_DAYS)
         },
         use_container_width=True,
         hide_index=True,
@@ -595,7 +659,7 @@ with tab4:
         new_tt = {}
         for _, row in edited_df.iterrows():
             p_name = row["Time"]
-            new_tt[p_name] = [row[f"Day {i+1}"] for i in range(6)]
+            new_tt[p_name] = [row[f"Day {i+1}"] for i in range(CYCLE_DAYS)]
         st.session_state.timetable = new_tt
         save_config()
         st.success("Timetable updated successfully!")
@@ -605,7 +669,8 @@ with tab4:
     
     room_data = []
     for period, rooms in st.session_state.rooms.items():
-        room_data.append({"Time": period, **{f"Day {i+1}": rooms[i] for i in range(6)}})
+        adjusted_rooms = (rooms + ["TBD"] * CYCLE_DAYS)[:CYCLE_DAYS]
+        room_data.append({"Time": period, **{f"Day {i+1}": adjusted_rooms[i] for i in range(CYCLE_DAYS)}})
     
     room_df = pd.DataFrame(room_data)
     edited_room_df = st.data_editor(
@@ -619,7 +684,7 @@ with tab4:
         new_rooms = {}
         for _, row in edited_room_df.iterrows():
             p_name = row["Time"]
-            new_rooms[p_name] = [str(row[f"Day {i+1}"]) for i in range(6)]
+            new_rooms[p_name] = [str(row[f"Day {i+1}"]) for i in range(CYCLE_DAYS)]
         st.session_state.rooms = new_rooms
         save_config()
         st.success("Classroom locations saved!")
@@ -639,7 +704,6 @@ with tab5:
     if selected_class:
         st.subheader(f"Grade Breakdown: {selected_class}")
         
-        # Load or set default weightings for this class
         class_weights = st.session_state.grade_weights.get(selected_class, DEFAULT_WEIGHTS.copy())
         
         with st.expander("⚙️ Customize Category Weights (%) for " + selected_class, expanded=True):
@@ -765,54 +829,30 @@ with tab5:
 
         eval_items = [e for e in class_data["evaluative"] if isinstance(e.get("score"), (int, float))]
         
-        total_eval_points = 0
-        total_eval_weight = 0
-        for e in eval_items:
-            w = 2.0 if e["type"] == "Test" else 1.0
-            total_eval_points += e["score"] * w
-            total_eval_weight += w
+        weighted_eval_sum = sum(e["score"] * (2 if e["type"] == "Test" else 1) for e in eval_items)
+        weighted_eval_count = sum(2 if e["type"] == "Test" else 1 for e in eval_items)
+        eval_avg = weighted_eval_sum / weighted_eval_count if weighted_eval_count > 0 else None
 
-        eval_avg = total_eval_points / total_eval_weight if total_eval_weight > 0 else None
+        col_res1, col_res2, col_res3, col_res4 = st.columns(4)
+        col_res1.metric("Daily Avg", f"{daily_avg:.1f}%" if daily_avg is not None else "N/A")
+        col_res2.metric("Formative Avg", f"{form_avg:.1f}%" if form_avg is not None else "N/A")
+        col_res3.metric("Evaluative Avg", f"{eval_avg:.1f}%" if eval_avg is not None else "N/A")
 
-        weighted_sum = 0
-        total_applied_weight = 0
+        total_weight_used = 0
+        current_grade = 0
 
         if daily_avg is not None:
-            weighted_sum += daily_avg * (w_daily / 100.0)
-            total_applied_weight += (w_daily / 100.0)
-            
+            current_grade += daily_avg * (w_daily / 100)
+            total_weight_used += w_daily
         if form_avg is not None:
-            weighted_sum += form_avg * (w_form / 100.0)
-            total_applied_weight += (w_form / 100.0)
-            
+            current_grade += form_avg * (w_form / 100)
+            total_weight_used += w_form
         if eval_avg is not None:
-            weighted_sum += eval_avg * (w_eval / 100.0)
-            total_applied_weight += (w_eval / 100.0)
+            current_grade += eval_avg * (w_eval / 100)
+            total_weight_used += w_eval
 
-        final_grade = (weighted_sum / total_applied_weight) if total_applied_weight > 0 else None
-
-        def get_letter_grade(pct):
-            if pct is None: return "N/A"
-            if pct >= 93: return "A"
-            if pct >= 90: return "A-"
-            if pct >= 87: return "B+"
-            if pct >= 83: return "B"
-            if pct >= 80: return "B-"
-            if pct >= 77: return "C+"
-            if pct >= 73: return "C"
-            if pct >= 70: return "C-"
-            if pct >= 60: return "D"
-            return "F"
-
-        st.subheader("📈 Summary Breakdown")
-        m1, m2, m3, m4 = st.columns(4)
-        
-        m1.metric(f"Daily Avg ({w_daily:.0f}%)", f"{daily_avg:.1f}%" if daily_avg is not None else "No grades")
-        m2.metric(f"Formative Avg ({w_form:.0f}%)", f"{form_avg:.1f}%" if form_avg is not None else "No grades")
-        m3.metric(f"Evaluative Avg ({w_eval:.0f}%)", f"{eval_avg:.1f}%" if eval_avg is not None else "No grades")
-        
-        if final_grade is not None:
-            letter = get_letter_grade(final_grade)
-            m4.metric("Overall Class Grade", f"{final_grade:.2f}% ({letter})")
+        if total_weight_used > 0:
+            final_calculated_grade = (current_grade / total_weight_used) * 100
+            col_res4.metric("Overall Weighted Grade", f"{final_calculated_grade:.2f}%")
         else:
-            m4.metric("Overall Class Grade", "Enter grades above")
+            col_res4.metric("Overall Weighted Grade", "N/A")
