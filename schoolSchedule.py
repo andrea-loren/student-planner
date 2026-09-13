@@ -236,16 +236,31 @@ with tab1:
     st.markdown("---")
 
     # Inject global button styling so free period buttons match class cards exactly
+    # Inject CSS to make popover buttons look identical to class cards
     st.markdown("""
         <style>
-        div[data-testid="stButton"] > button {
+        div[data-testid="stPopover"] > button {
             width: 100% !important;
+            background-color: #E5E5E5 !important;
+            color: #121212 !important;
+            border: 1px solid #ddd !important;
             border-radius: 5px !important;
             padding: 6px !important;
             margin-bottom: 6px !important;
+            font-size: 12px !important;
+            font-weight: bold !important;
             text-align: center !important;
-            border: 1px solid #ddd !important;
+            box-shadow: none !important;
             min-height: 48px !important;
+        }
+        div[data-testid="stPopover"] > button:hover {
+            border-color: #999 !important;
+            background-color: #DCDCDC !important;
+        }
+        div[data-testid="stPopover"] > button p {
+            font-size: 12px !important;
+            font-weight: bold !important;
+            margin: 0 !important;
             line-height: 1.2 !important;
         }
         </style>
