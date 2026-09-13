@@ -450,7 +450,7 @@ with tab2:
 
         render_task_list("Homework", col_hw, "📚 Homework & To-Dos")
         render_task_list("Assessment", col_assess, "🚨 Assessments & Exams")
-        render_task_list("Extracurricular / Personal", col_extra, "🏆 Extracurricular & SAT")
+        render_task_list("Extracurricular / Personal", col_extra, "🏆 Extracurricular")
 
 # --- TAB 3: POMODORO TIMER ---
 with tab3:
