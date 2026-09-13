@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import uuid
 import pandas as pd
 import streamlit as st
 from datetime import datetime, date, timedelta
@@ -36,6 +37,12 @@ DEFAULT_COLORS = {
     "Extracurricular / Other": "#FFD1DC"
 }
 
+DEFAULT_WEIGHTS = {
+    "daily": 10.0,
+    "formative": 20.0,
+    "evaluative": 70.0
+}
+
 DEFAULT_TIMETABLE = {
     "08:00 - 08:56": ["Honors English", "Advanced Calculus AB", "Advanced Biology", "Advanced French", "Free Period", "Free Period"],
     "09:00 - 09:56": ["Advanced Calculus AB", "Honors English", "Philosophy", "Free Period", "Advanced Computer Science", "Free Period"],
@@ -67,6 +74,7 @@ if os.path.exists(CONFIG_FILE):
         st.session_state.blocked_periods = config.get("blocked_periods", {})
         st.session_state.daily_notes = config.get("daily_notes", {})
         st.session_state.grades = config.get("grades", {})
+        st.session_state.grade_weights = config.get("grade_weights", {})
 else:
     st.session_state.classes = DEFAULT_CLASSES
     st.session_state.colors = DEFAULT_COLORS
@@ -75,13 +83,16 @@ else:
     st.session_state.blocked_periods = {}
     st.session_state.daily_notes = {}
     st.session_state.grades = {}
+    st.session_state.grade_weights = {}
 
 if "tasks" not in st.session_state:
     if os.path.exists(TASKS_FILE):
         st.session_state.tasks = pd.read_csv(TASKS_FILE)
+        if "id" not in st.session_state.tasks.columns:
+            st.session_state.tasks["id"] = [str(uuid.uuid4()) for _ in range(len(st.session_state.tasks))]
         st.session_state.tasks["Due Date"] = pd.to_datetime(st.session_state.tasks["Due Date"]).dt.date
     else:
-        st.session_state.tasks = pd.DataFrame(columns=["Title", "Class", "Type", "Due Date", "Status"])
+        st.session_state.tasks = pd.DataFrame(columns=["id", "Title", "Class", "Type", "Due Date", "Status"])
 
 if "week_offset" not in st.session_state:
     st.session_state.week_offset = 0
@@ -95,7 +106,8 @@ def save_config():
             "rooms": st.session_state.rooms,
             "blocked_periods": st.session_state.blocked_periods,
             "daily_notes": st.session_state.daily_notes,
-            "grades": st.session_state.get("grades", {})
+            "grades": st.session_state.get("grades", {}),
+            "grade_weights": st.session_state.get("grade_weights", {})
         }, f, indent=4)
 
 def save_tasks():
@@ -223,7 +235,7 @@ with tab1:
 
     st.markdown("---")
 
-    # ROW 2: Classes & Room Numbers
+    # ROW 2: Classes & Room Numbers (With Direct Clickable Free Periods)
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -245,22 +257,11 @@ with tab1:
                 is_blocked = st.session_state.blocked_periods.get(block_key, False)
                 
                 if class_name == "Free Period" and c_day:
-                    emoji_label = "🔒 Meeting / Busy" if is_blocked else "🟢 Free Period"
+                    btn_label = f"{period_time}\n🔒 Meeting / Busy" if is_blocked else f"{period_time}\n🟢 Free Period"
                     
-                    st.markdown(
-                        f"<div style='background-color:{bg_color}; color:#121212; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
-                        f"<small style='font-weight:normal; font-size:10px;'>{period_time}</small><br>{emoji_label}"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
-                    
-                    st.button(
-                        "Toggle Block Status", 
-                        key=f"btn_{block_key}", 
-                        on_click=toggle_block, 
-                        args=(block_key,),
-                        use_container_width=True
-                    )
+                    if st.button(btn_label, key=f"btn_free_{block_key}", use_container_width=True):
+                        toggle_block(block_key)
+                        st.rerun()
                 else:
                     period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
@@ -276,7 +277,7 @@ with tab1:
 
     st.markdown("---")
 
-    # ROW 3: Dynamic Daily Reminders & Multi-Line Notes
+    # ROW 3: Daily Notes
     st.subheader("💡 Daily Reminders & Special Schedule Notes")
     note_cols = st.columns(5)
     
@@ -325,6 +326,7 @@ with tab2:
             if st.form_submit_button("Save Item"):
                 if title:
                     new_item = pd.DataFrame([{
+                        "id": str(uuid.uuid4()),
                         "Title": title,
                         "Class": subject,
                         "Type": task_type,
@@ -349,30 +351,33 @@ with tab2:
         if filter_cls != "All":
             df = df[df["Class"] == filter_cls]
             
-        if sort_by == "Due Next":
-            df = df.sort_values(by="Due Date", ascending=True)
-        else:
-            df = df.sort_values(by="Class", ascending=True)
-
         col_hw, col_assess, col_extra = st.columns(3)
         
         def render_task_list(task_type, container, header_title):
             with container:
                 st.subheader(header_title)
-                filtered = df[df["Type"] == task_type]
+                filtered = df[df["Type"] == task_type].copy()
                 
                 if filtered.empty:
                     st.info("No items in this list!")
                     return
 
+                # Sort: Pending items top, Completed items bottom
+                filtered["is_completed"] = filtered["Status"] == "Completed"
+                if sort_by == "Due Next":
+                    filtered = filtered.sort_values(by=["is_completed", "Due Date"], ascending=[True, True])
+                else:
+                    filtered = filtered.sort_values(by=["is_completed", "Class"], ascending=[True, True])
+
                 for idx, row in filtered.iterrows():
                     cols = st.columns([0.15, 0.5, 0.25, 0.1])
+                    task_id = row["id"]
                     
                     is_done = row["Status"] == "Completed"
-                    checked = cols[0].checkbox("", value=is_done, key=f"task_{idx}")
+                    checked = cols[0].checkbox("", value=is_done, key=f"task_{task_id}")
                     
                     if checked != is_done:
-                        st.session_state.tasks.at[idx, "Status"] = "Completed" if checked else "Pending"
+                        st.session_state.tasks.loc[st.session_state.tasks["id"] == task_id, "Status"] = "Completed" if checked else "Pending"
                         save_tasks()
                         st.rerun()
 
@@ -380,8 +385,8 @@ with tab2:
                     cols[1].markdown(f"{title_str} <br><small>{row['Class']}</small>", unsafe_allow_html=True)
                     cols[2].caption(row["Due Date"].strftime("%Y-%m-%d"))
                     
-                    if cols[3].button("🗑️", key=f"del_{idx}"):
-                        st.session_state.tasks = st.session_state.tasks.drop(idx).reset_index(drop=True)
+                    if cols[3].button("🗑️", key=f"del_{task_id}"):
+                        st.session_state.tasks = st.session_state.tasks[st.session_state.tasks["id"] != task_id].reset_index(drop=True)
                         save_tasks()
                         st.rerun()
 
@@ -466,7 +471,39 @@ with tab3:
 with tab4:
     st.header("Schedule, Rooms & Color Configuration")
     
-    st.subheader("1. Subject Color Palette")
+    # 0. CLASS NAME MANAGER
+    st.subheader("1. Class List Manager")
+    with st.expander("✏️ Rename, Add, or Delete Classes"):
+        st.markdown("**Rename Existing Classes:**")
+        updated_classes = list(st.session_state.classes)
+        for i, c_name in enumerate(st.session_state.classes):
+            c1, c2 = st.columns([0.8, 0.2])
+            new_name = c1.text_input(f"Class #{i+1}", value=c_name, key=f"rename_{i}")
+            if c2.button("Delete", key=f"del_class_{i}"):
+                updated_classes.pop(i)
+                st.session_state.classes = updated_classes
+                save_config()
+                st.rerun()
+            else:
+                updated_classes[i] = new_name
+
+        st.markdown("---")
+        new_class_input = st.text_input("Add New Class Name:", placeholder="e.g. AP Physics")
+        if st.button("➕ Add Class"):
+            if new_class_input and new_class_input not in updated_classes:
+                updated_classes.append(new_class_input)
+                st.session_state.classes = updated_classes
+                save_config()
+                st.rerun()
+
+        if st.button("Save Class List Updates"):
+            st.session_state.classes = updated_classes
+            save_config()
+            st.success("Class names updated successfully!")
+            st.rerun()
+
+    st.markdown("---")
+    st.subheader("2. Subject Color Palette")
     color_cols = st.columns(3)
     for idx, cls in enumerate(st.session_state.classes):
         with color_cols[idx % 3]:
@@ -480,7 +517,7 @@ with tab4:
         st.success("Colors updated!")
 
     st.markdown("---")
-    st.subheader("2. Edit 6-Day Rotation Class Grid")
+    st.subheader("3. Edit 6-Day Rotation Class Grid")
     
     schedule_data = []
     for period, days in st.session_state.timetable.items():
@@ -508,7 +545,7 @@ with tab4:
         st.success("Timetable updated successfully!")
 
     st.markdown("---")
-    st.subheader("3. Edit Classroom Locations (Room Numbers)")
+    st.subheader("4. Edit Classroom Locations (Room Numbers)")
     
     room_data = []
     for period, rooms in st.session_state.rooms.items():
@@ -534,7 +571,6 @@ with tab4:
 # --- TAB 5: GRADE CALCULATOR ---
 with tab5:
     st.header("📊 Class Grade Calculator")
-    st.caption("Weighting Scale: Daily (10%) | Formative (20%) | Evaluative (70% — Tests count 2x Quizzes)")
 
     EXCLUDED_CLASSES = {
         "Advanced Photography", "Free Period", "Kairos", 
@@ -547,6 +583,25 @@ with tab5:
     if selected_class:
         st.subheader(f"Grade Breakdown: {selected_class}")
         
+        # Load or set default weightings for this class
+        class_weights = st.session_state.grade_weights.get(selected_class, DEFAULT_WEIGHTS.copy())
+        
+        with st.expander("⚙️ Customize Category Weights (%) for " + selected_class, expanded=True):
+            w_col1, w_col2, w_col3 = st.columns(3)
+            w_daily = w_col1.number_input("Daily Work Weight (%)", value=float(class_weights.get("daily", 10.0)), step=1.0)
+            w_form = w_col2.number_input("Formative Weight (%)", value=float(class_weights.get("formative", 20.0)), step=1.0)
+            w_eval = w_col3.number_input("Evaluative Weight (%)", value=float(class_weights.get("evaluative", 70.0)), step=1.0)
+            
+            total_w = w_daily + w_form + w_eval
+            if total_w != 100.0:
+                st.warning(f"⚠️ Total weight equals {total_w:.1f}%. (It should ideally equal 100%)")
+            
+            st.session_state.grade_weights[selected_class] = {
+                "daily": w_daily,
+                "formative": w_form,
+                "evaluative": w_eval
+            }
+
         if selected_class not in st.session_state.grades:
             st.session_state.grades[selected_class] = {
                 "daily": [""],
@@ -558,9 +613,9 @@ with tab5:
 
         col_daily, col_form, col_eval = st.columns(3)
 
-        # 1. Daily Grades (10%)
+        # 1. Daily Grades
         with col_daily:
-            st.markdown("### 📅 Daily Work (10%)")
+            st.markdown(f"### 📅 Daily Work ({w_daily:.0f}%)")
             daily_list = class_data.get("daily", [""])
             if not daily_list or daily_list[-1] != "":
                 daily_list.append("")
@@ -581,9 +636,9 @@ with tab5:
             
             class_data["daily"] = updated_daily
 
-        # 2. Formative Grades (20%)
+        # 2. Formative Grades
         with col_form:
-            st.markdown("### 📝 Formative / HW (20%)")
+            st.markdown(f"### 📝 Formative / HW ({w_form:.0f}%)")
             form_list = class_data.get("formative", [""])
             if not form_list or form_list[-1] != "":
                 form_list.append("")
@@ -604,9 +659,9 @@ with tab5:
 
             class_data["formative"] = updated_form
 
-        # 3. Evaluative Grades (70%)
+        # 3. Evaluative Grades
         with col_eval:
-            st.markdown("### 🚨 Evaluative (70%)")
+            st.markdown(f"### 🚨 Evaluative ({w_eval:.0f}%)")
             st.caption("Tests weight 2x compared to Quizzes")
             
             eval_list = class_data.get("evaluative", [{"type": "Quiz", "score": ""}])
@@ -664,21 +719,21 @@ with tab5:
         eval_avg = total_eval_points / total_eval_weight if total_eval_weight > 0 else None
 
         weighted_sum = 0
-        total_weight = 0
+        total_applied_weight = 0
 
         if daily_avg is not None:
-            weighted_sum += daily_avg * 0.10
-            total_weight += 0.10
+            weighted_sum += daily_avg * (w_daily / 100.0)
+            total_applied_weight += (w_daily / 100.0)
             
         if form_avg is not None:
-            weighted_sum += form_avg * 0.20
-            total_weight += 0.20
+            weighted_sum += form_avg * (w_form / 100.0)
+            total_applied_weight += (w_form / 100.0)
             
         if eval_avg is not None:
-            weighted_sum += eval_avg * 0.70
-            total_weight += 0.70
+            weighted_sum += eval_avg * (w_eval / 100.0)
+            total_applied_weight += (w_eval / 100.0)
 
-        final_grade = (weighted_sum / total_weight) if total_weight > 0 else None
+        final_grade = (weighted_sum / total_applied_weight) if total_applied_weight > 0 else None
 
         def get_letter_grade(pct):
             if pct is None: return "N/A"
@@ -696,9 +751,9 @@ with tab5:
         st.subheader("📈 Summary Breakdown")
         m1, m2, m3, m4 = st.columns(4)
         
-        m1.metric("Daily Avg (10%)", f"{daily_avg:.1f}%" if daily_avg is not None else "No grades")
-        m2.metric("Formative Avg (20%)", f"{form_avg:.1f}%" if form_avg is not None else "No grades")
-        m3.metric("Evaluative Avg (70%)", f"{eval_avg:.1f}%" if eval_avg is not None else "No grades")
+        m1.metric(f"Daily Avg ({w_daily:.0f}%)", f"{daily_avg:.1f}%" if daily_avg is not None else "No grades")
+        m2.metric(f"Formative Avg ({w_form:.0f}%)", f"{form_avg:.1f}%" if form_avg is not None else "No grades")
+        m3.metric(f"Evaluative Avg ({w_eval:.0f}%)", f"{eval_avg:.1f}%" if eval_avg is not None else "No grades")
         
         if final_grade is not None:
             letter = get_letter_grade(final_grade)
