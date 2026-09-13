@@ -266,7 +266,7 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Uniform Popover Grid)
+    # ROW 2: Classes & Room Numbers (Restored Original Layout)
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -278,17 +278,19 @@ with tab1:
                 if c_day:
                     class_name = schedule[c_day - 1]
                     room_no = st.session_state.rooms.get(period_time, [""]*6)[c_day - 1]
+                    bg_color = st.session_state.colors.get(class_name, "#FFFFFF")
                 else:
                     class_name = "No School"
                     room_no = ""
+                    bg_color = "#F0F0F0"
                 
                 block_key = f"{date_str}_{period_time}"
                 is_blocked = st.session_state.blocked_periods.get(block_key, False)
                 custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
                 
-                period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
-
                 if class_name == "Free Period" and c_day:
+                    period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
+                    
                     if is_blocked:
                         status_display = f"🔒 {custom_note}" if custom_note else "🔒 Meeting / Busy"
                     else:
@@ -303,25 +305,24 @@ with tab1:
                             save_config()
                             st.rerun()
 
-                        new_note = st.text_input("Activity / Note", value=custom_note, placeholder="e.g. SAT Prep, Tutoring", key=f"inp_{block_key}")
+                        new_note = st.text_input("What are you doing?", value=custom_note, placeholder="e.g. SAT Prep, Tutoring", key=f"inp_{block_key}")
                         if new_note != custom_note:
                             st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
                             save_config()
                             st.rerun()
+
                 else:
+                    period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
+                    card_color = "#757575" if is_blocked else bg_color
+                    text_color = "#FFFFFF" if is_blocked else "#121212"
                     
-                    with st.popover(f"{period_label}\n{display_text}", use_container_width=True):
-                        st.markdown(f"**Class Details ({period_time})**")
-                        st.write(f"**Subject:** {class_name}")
-                        if room_no:
-                            st.write(f"**Room:** {room_no}")
-                        
-                        new_blocked = st.toggle("Mark Period as Blocked", value=is_blocked, key=f"tog_cls_{block_key}")
-                        if new_blocked != is_blocked:
-                            st.session_state.blocked_periods[block_key] = new_blocked
-                            save_config()
-                            st.rerun()
+                    st.markdown(
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
+                        f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
                     
     # ROW 3: Daily Notes
     st.subheader("💡 Daily Reminders & Special Schedule Notes")
