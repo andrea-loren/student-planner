@@ -268,6 +268,24 @@ with tab1:
 
     # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
     
+    # CSS to force buttons to match the exact height, padding, and margin of HTML cards
+    st.markdown("""
+        <style>
+        div[data-testid="stButton"] {
+            margin-bottom: 6px !important;
+        }
+        div[data-testid="stButton"] > button {
+            border-radius: 5px !important;
+            padding: 6px !important;
+            margin: 0 !important;
+            border: 1px solid #ddd !important;
+            min-height: 48px !important;
+            height: auto !important;
+            line-height: 1.2 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     # Dialog for editing free periods cleanly without breaking block styling
     @st.dialog("Edit Free Period Activity")
     def edit_free_period_modal(block_key, period_time):
@@ -311,15 +329,11 @@ with tab1:
                 if class_name == "Free Period" and c_day:
                     if is_blocked:
                         status_display = f"🚫 {custom_note}" if custom_note else "🚫 Meeting / Busy"
-                        card_color = "#757575"
-                        text_color = "#FFFFFF"
                     else:
                         status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
-                        card_color = bg_color
-                        text_color = "#121212"
 
-                    # Button styled cleanly using native Streamlit full-width layout
-                    btn_text = f"{status_display}"
+                    # Includes period time on line 1 so height matches the class cards
+                    btn_text = f"{period_label}\n{status_display}"
                     if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
                         edit_free_period_modal(block_key, period_time)
 
