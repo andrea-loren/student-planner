@@ -268,70 +268,70 @@ with tab1:
 
     # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
 
-# Dialog for editing free periods cleanly without breaking block styling
-@st.dialog("Edit Free Period Activity")
-def edit_free_period_modal(block_key, period_time):
-    is_blocked = st.session_state.blocked_periods.get(block_key, False)
-    custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
+    # Dialog for editing free periods cleanly without breaking block styling
+    @st.dialog("Edit Free Period Activity")
+    def edit_free_period_modal(block_key, period_time):
+        is_blocked = st.session_state.blocked_periods.get(block_key, False)
+        custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
 
-    st.write(f"**Period:** {period_time}")
+        st.write(f"**Period:** {period_time}")
 
-    new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"dlg_tog_{block_key}")
-    new_note = st.text_input("What are you doing during this time?", value=custom_note, placeholder="e.g., SAT Prep, Math Tutoring", key=f"dlg_inp_{block_key}")
+        new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"dlg_tog_{block_key}")
+        new_note = st.text_input("What are you doing during this time?", value=custom_note, placeholder="e.g., SAT Prep, Math Tutoring", key=f"dlg_inp_{block_key}")
 
-    if st.button("Save Changes", type="primary", use_container_width=True):
-        st.session_state.blocked_periods[block_key] = new_blocked
-        st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
-        save_config()
-        st.rerun()
+        if st.button("Save Changes", type="primary", use_container_width=True):
+            st.session_state.blocked_periods[block_key] = new_blocked
+            st.session_state.daily_notes[f"free_note_{block_key}"] = new_note
+            save_config()
+            st.rerun()
 
-class_cols = st.columns(5)
-for idx, d in enumerate(week_days):
-    c_day = get_cycle_day(d)
-    date_str = d.strftime("%Y-%m-%d")
+    class_cols = st.columns(5)
+    for idx, d in enumerate(week_days):
+        c_day = get_cycle_day(d)
+        date_str = d.strftime("%Y-%m-%d")
 
-    with class_cols[idx]:
-        st.markdown("#### 🗓️ Classes")
-        for period_time, schedule in st.session_state.timetable.items():
-            if c_day:
-                class_name = schedule[c_day - 1]
-                room_no = st.session_state.rooms.get(period_time, [""]*6)[c_day - 1]
-                bg_color = st.session_state.colors.get(class_name, "#FFFFFF")
-            else:
-                class_name = "No School"
-                room_no = ""
-                bg_color = "#F0F0F0"
-
-            block_key = f"{date_str}_{period_time}"
-            is_blocked = st.session_state.blocked_periods.get(block_key, False)
-            custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
-            period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
-
-            if class_name == "Free Period" and c_day:
-                if is_blocked:
-                    status_display = f"🚫 {custom_note}" if custom_note else "🚫 Meeting / Busy"
-                    card_color = "#757575"
-                    text_color = "#FFFFFF"
+        with class_cols[idx]:
+            st.markdown("#### 🗓️ Classes")
+            for period_time, schedule in st.session_state.timetable.items():
+                if c_day:
+                    class_name = schedule[c_day - 1]
+                    room_no = st.session_state.rooms.get(period_time, [""]*6)[c_day - 1]
+                    bg_color = st.session_state.colors.get(class_name, "#FFFFFF")
                 else:
-                    status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
-                    card_color = bg_color
-                    text_color = "#121212"
+                    class_name = "No School"
+                    room_no = ""
+                    bg_color = "#F0F0F0"
 
-                # Button styled cleanly using native Streamlit full-width layout
-                btn_text = f"{status_display}"
-                if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
-                    edit_free_period_modal(block_key, period_time)
+                block_key = f"{date_str}_{period_time}"
+                is_blocked = st.session_state.blocked_periods.get(block_key, False)
+                custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
+                period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
 
-            else:
-                display_text = "🚫 Blocked / Busy" if is_blocked else class_name
-                card_color = "#757575" if is_blocked else bg_color
-                text_color = "#FFFFFF" if is_blocked else "#121212"
-                st.markdown(
-                    f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
-                    f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
+                if class_name == "Free Period" and c_day:
+                    if is_blocked:
+                        status_display = f"🚫 {custom_note}" if custom_note else "🚫 Meeting / Busy"
+                        card_color = "#757575"
+                        text_color = "#FFFFFF"
+                    else:
+                        status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
+                        card_color = bg_color
+                        text_color = "#121212"
+
+                    # Button styled cleanly using native Streamlit full-width layout
+                    btn_text = f"{status_display}"
+                    if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
+                        edit_free_period_modal(block_key, period_time)
+
+                else:
+                    display_text = "🚫 Blocked / Busy" if is_blocked else class_name
+                    card_color = "#757575" if is_blocked else bg_color
+                    text_color = "#FFFFFF" if is_blocked else "#121212"
+                    st.markdown(
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
+                        f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
                     
     # ROW 3: Daily Notes
     st.subheader("💡 Daily Reminders & Special Schedule Notes")
