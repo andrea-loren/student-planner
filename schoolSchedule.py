@@ -268,9 +268,14 @@ with tab1:
 
     # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
     
-    # CSS to force buttons to match the exact height, padding, and margin of HTML cards
+    # CSS to force button containers to match the exact spacing of HTML cards
     st.markdown("""
         <style>
+        /* Remove Streamlit's default container gap around buttons */
+        div[data-testid="stColumn"] div[data-testid="stElementContainer"]:has(div[data-testid="stButton"]) {
+            margin-bottom: 0px !important;
+            padding-bottom: 0px !important;
+        }
         div[data-testid="stButton"] {
             margin-bottom: 6px !important;
         }
@@ -280,7 +285,7 @@ with tab1:
             margin: 0 !important;
             border: 1px solid #ddd !important;
             min-height: 48px !important;
-            height: auto !important;
+            height: 48px !important;
             line-height: 1.2 !important;
         }
         </style>
@@ -332,7 +337,6 @@ with tab1:
                     else:
                         status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
 
-                    # Includes period time on line 1 so height matches the class cards
                     btn_text = f"{period_label}\n{status_display}"
                     if st.button(btn_text, key=f"btn_fp_{block_key}", use_container_width=True):
                         edit_free_period_modal(block_key, period_time)
@@ -343,7 +347,7 @@ with tab1:
                     text_color = "#FFFFFF" if is_blocked else "#121212"
                     
                     st.markdown(
-                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd;'>"
+                        f"<div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; margin-bottom:6px; text-align:center; font-size:12px; font-weight:bold; border:1px solid #ddd; height:48px; box-sizing:border-box;'>"
                         f"<small style='font-weight:normal; font-size:10px;'>{period_label}</small><br>{display_text}"
                         f"</div>",
                         unsafe_allow_html=True
