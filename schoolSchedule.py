@@ -235,7 +235,7 @@ with tab1:
 
     st.markdown("---")
 
-    # ROW 2: Classes & Room Numbers (With Direct Clickable Free Periods)
+    # ROW 2: Classes & Room Numbers (With Styled Clickable Free Periods)
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -257,11 +257,39 @@ with tab1:
                 is_blocked = st.session_state.blocked_periods.get(block_key, False)
                 
                 if class_name == "Free Period" and c_day:
-                    btn_label = f"{period_time}\n🔒 Meeting / Busy" if is_blocked else f"{period_time}\n🟢 Free Period"
+                    period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
+                    status_text = "🔒 Meeting / Busy" if is_blocked else "🟢 Free Period"
+                    card_color = "#757575" if is_blocked else bg_color
+                    text_color = "#FFFFFF" if is_blocked else "#121212"
                     
-                    if st.button(btn_label, key=f"btn_free_{block_key}", use_container_width=True):
+                    # Inject HTML styling directly onto the Streamlit button
+                    button_html = f"""
+                    <div style='background-color:{card_color}; color:{text_color}; padding:6px; border-radius:5px; text-align:center; border:1px solid #ddd; margin-bottom:6px;'>
+                        <span style='font-size:10px; font-weight:normal;'>{period_label}</span><br>
+                        <span style='font-size:12px; font-weight:bold;'>{status_text}</span>
+                    </div>
+                    """
+                    
+                    if st.button(f"Free_{block_key}", key=f"btn_free_{block_key}", use_container_width=True):
                         toggle_block(block_key)
                         st.rerun()
+
+                    # Apply custom CSS targeting this button so it acts like a styled card
+                    st.markdown(
+                        f"""
+                        <style>
+                        div[data-testid="stButton"] button:has(div:contains("Free_{block_key}")) {{
+                            background-color: {card_color} !important;
+                            color: {text_color} !important;
+                            border: 1px solid #ddd !important;
+                            padding: 4px !important;
+                            height: auto !important;
+                            min-height: 48px !important;
+                        }}
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
                 else:
                     period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
@@ -274,9 +302,7 @@ with tab1:
                         f"</div>",
                         unsafe_allow_html=True
                     )
-
-    st.markdown("---")
-
+                    
     # ROW 3: Daily Notes
     st.subheader("💡 Daily Reminders & Special Schedule Notes")
     note_cols = st.columns(5)
