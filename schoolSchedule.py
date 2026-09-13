@@ -266,7 +266,7 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Restored Original Layout)
+    # ROW 2: Classes & Room Numbers
     class_cols = st.columns(5)
     for idx, d in enumerate(week_days):
         c_day = get_cycle_day(d)
@@ -288,15 +288,18 @@ with tab1:
                 is_blocked = st.session_state.blocked_periods.get(block_key, False)
                 custom_note = st.session_state.daily_notes.get(f"free_note_{block_key}", "")
                 
+                period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
+
                 if class_name == "Free Period" and c_day:
-                    period_label = f"{period_time} | {room_no}" if room_no and room_no != "TBD" else period_time
-                    
                     if is_blocked:
                         status_display = f"🔒 {custom_note}" if custom_note else "🔒 Meeting / Busy"
                     else:
                         status_display = f"🟢 {custom_note}" if custom_note else "🟢 Free Period"
 
-                    with st.popover(f"{period_label}\n{status_display}", use_container_width=True):
+                    # Single clean popover button with matching label structure
+                    pop_label = f"{period_label}\n{status_display}"
+                    
+                    with st.popover(pop_label, use_container_width=True):
                         st.markdown(f"**Edit Free Period ({period_time})**")
                         
                         new_blocked = st.toggle("Mark as Busy / Meeting", value=is_blocked, key=f"tog_{block_key}")
@@ -312,7 +315,6 @@ with tab1:
                             st.rerun()
 
                 else:
-                    period_label = f"{period_time} | {room_no}" if room_no else period_time
                     display_text = "🚫 Blocked / Busy" if is_blocked else class_name
                     card_color = "#757575" if is_blocked else bg_color
                     text_color = "#FFFFFF" if is_blocked else "#121212"
