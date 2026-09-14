@@ -816,7 +816,7 @@ with tab5:
                 st.caption(f"Evaluative Item #{i+1}")
                 
                 # Single-line horizontal layout for perfect alignment
-                ec1, ec2 = st.columns([0.45, 0.50])
+                ec1, ec2 = st.columns([0.45, 0.55])
                 
                 e_type = ec1.selectbox(
                     f"Type #{i+1}",
