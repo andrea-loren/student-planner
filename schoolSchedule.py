@@ -784,25 +784,32 @@ with tab5:
             st.markdown(f"### 🚨 Evaluative ({w_eval:.0f}%)")
             st.caption("Tests weight 2x compared to Quizzes")
             
-            eval_list = class_data.get("evaluative", [{"type": "Quiz", "score": ""}])
-            if not eval_list or eval_list[-1]["score"] != "":
+            # Read existing evaluative list
+            eval_list = class_data.get("evaluative", [])
+            
+            # Ensure there is always one trailing blank row for new entry
+            if not eval_list or (eval_list[-1].get("score") != "" and eval_list[-1].get("score") is not None):
                 eval_list.append({"type": "Quiz", "score": ""})
 
             updated_eval = []
             for i, item in enumerate(eval_list):
                 c_type, c_score = st.columns([0.4, 0.6])
                 
+                # Fetch key values safely
+                curr_type = item.get("type", "Quiz")
+                curr_score = item.get("score", "")
+
                 e_type = c_type.selectbox(
                     "Type", 
                     ["Quiz", "Test"], 
-                    index=0 if item.get("type", "Quiz") == "Quiz" else 1,
+                    index=0 if curr_type == "Quiz" else 1,
                     key=f"eval_type_{selected_class}_{i}",
                     label_visibility="collapsed"
                 )
                 
                 e_val = c_score.text_input(
                     f"Eval #{i+1}", 
-                    value=str(item["score"]) if item["score"] != "" else "", 
+                    value=str(curr_score) if curr_score != "" else "", 
                     key=f"eval_score_{selected_class}_{i}",
                     placeholder="Grade",
                     label_visibility="collapsed"
@@ -813,46 +820,19 @@ with tab5:
                         updated_eval.append({"type": e_type, "score": float(e_val)})
                     except ValueError:
                         st.error("Enter a number")
+                else:
+                    # Keep blank field representation so the row doesn't collapse while typing
+                    updated_eval.append({"type": e_type, "score": ""})
 
-            class_data["evaluative"] = updated_eval
+            # Explicitly force-update state dictionary for the current selected class
+            st.session_state.grades[selected_class]["evaluative"] = updated_eval
 
-        st.session_state.grades[selected_class] = class_data
-        save_config()
-
-        st.markdown("---")
-        
-        daily_scores = [s for s in class_data["daily"] if isinstance(s, (int, float))]
-        daily_avg = sum(daily_scores) / len(daily_scores) if daily_scores else None
-
-        form_scores = [s for s in class_data["formative"] if isinstance(s, (int, float))]
-        form_avg = sum(form_scores) / len(form_scores) if form_scores else None
-
-        eval_items = [e for e in class_data["evaluative"] if isinstance(e.get("score"), (int, float))]
+        # Filter completed numeric evaluative scores for calculation
+        eval_items = [
+            e for e in st.session_state.grades[selected_class]["evaluative"] 
+            if isinstance(e.get("score"), (int, float))
+        ]
         
         weighted_eval_sum = sum(e["score"] * (2 if e["type"] == "Test" else 1) for e in eval_items)
         weighted_eval_count = sum(2 if e["type"] == "Test" else 1 for e in eval_items)
         eval_avg = weighted_eval_sum / weighted_eval_count if weighted_eval_count > 0 else None
-
-        col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-        col_res1.metric("Daily Avg", f"{daily_avg:.1f}%" if daily_avg is not None else "N/A")
-        col_res2.metric("Formative Avg", f"{form_avg:.1f}%" if form_avg is not None else "N/A")
-        col_res3.metric("Evaluative Avg", f"{eval_avg:.1f}%" if eval_avg is not None else "N/A")
-
-        total_weight_used = 0
-        current_grade = 0
-
-        if daily_avg is not None:
-            current_grade += daily_avg * (w_daily / 100)
-            total_weight_used += w_daily
-        if form_avg is not None:
-            current_grade += form_avg * (w_form / 100)
-            total_weight_used += w_form
-        if eval_avg is not None:
-            current_grade += eval_avg * (w_eval / 100)
-            total_weight_used += w_eval
-
-        if total_weight_used > 0:
-            final_calculated_grade = (current_grade / total_weight_used) * 100
-            col_res4.metric("Overall Weighted Grade", f"{final_calculated_grade:.2f}%")
-        else:
-            col_res4.metric("Overall Weighted Grade", "N/A")
