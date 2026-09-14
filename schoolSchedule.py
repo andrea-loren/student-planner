@@ -699,14 +699,17 @@ with tab5:
     }
     academic_classes = [c for c in st.session_state.classes if c not in EXCLUDED_CLASSES]
 
-    selected_class = st.selectbox("Select Academic Class:", academic_classes)
+    selected_class = st.selectbox("Select Academic Class:", academic_classes, key="grade_calc_subject_select")
 
     if selected_class:
         st.subheader(f"Grade Breakdown: {selected_class}")
         
-        # Load weights for selected class
-        class_weights = st.session_state.grade_weights.get(selected_class, DEFAULT_WEIGHTS.copy())
-        
+        # Ensure class weight configuration exists in session state
+        if selected_class not in st.session_state.grade_weights:
+            st.session_state.grade_weights[selected_class] = DEFAULT_WEIGHTS.copy()
+            
+        class_weights = st.session_state.grade_weights[selected_class]
+
         with st.expander(f"⚙️ Customize Category Weights (%) for {selected_class}", expanded=False):
             w_col1, w_col2, w_col3 = st.columns(3)
             w_daily = w_col1.number_input("Daily Work Weight (%)", value=float(class_weights.get("daily", 10.0)), step=1.0, key=f"w_d_{selected_class}")
@@ -727,7 +730,7 @@ with tab5:
                 st.success("Weights updated successfully!")
                 st.rerun()
 
-        # Initialize default grades for selected class if missing
+        # Ensure class grade structure exists
         if selected_class not in st.session_state.grades:
             st.session_state.grades[selected_class] = {
                 "daily": [],
@@ -737,9 +740,6 @@ with tab5:
 
         class_data = st.session_state.grades[selected_class]
 
-        col_daily, col_form, col_eval = st.columns(3)
-
-        # Helper function to compute average scores
         def calculate_avg(scores_list):
             valid_scores = []
             for item in scores_list:
@@ -747,18 +747,25 @@ with tab5:
                 try:
                     if str(val).strip() != "":
                         valid_scores.append(float(val))
-                except ValueError:
+                except (ValueError, TypeError):
                     pass
             return sum(valid_scores) / len(valid_scores) if valid_scores else None
 
+        col_daily, col_form, col_eval = st.columns(3)
+
         # 1. Daily Work Column
         with col_daily:
-            st.markdown(f"### 📅 Daily Work ({w_daily:.0f}%)")
+            st.markdown(f"### 📅 Daily ({w_daily:.0f}%)")
             daily_list = class_data.get("daily", [])
             updated_daily = []
-            
+
             for i, score in enumerate(daily_list + [""]):
-                val = st.text_input(f"Score #{i+1}", value=str(score), key=f"daily_{selected_class}_{i}")
+                val = st.text_input(
+                    f"Daily Score #{i+1}", 
+                    value=str(score), 
+                    key=f"daily_in_{selected_class}_{i}",
+                    placeholder="Score %"
+                )
                 if val.strip() != "":
                     updated_daily.append(val)
 
@@ -767,14 +774,19 @@ with tab5:
                 save_config()
                 st.rerun()
 
-        # 2. Formative Assessments Column
+        # 2. Formative Column
         with col_form:
             st.markdown(f"### 📝 Formative ({w_form:.0f}%)")
             form_list = class_data.get("formative", [])
             updated_form = []
-            
+
             for i, score in enumerate(form_list + [""]):
-                val = st.text_input(f"Score #{i+1}", value=str(score), key=f"form_{selected_class}_{i}")
+                val = st.text_input(
+                    f"Formative Score #{i+1}", 
+                    value=str(score), 
+                    key=f"form_in_{selected_class}_{i}",
+                    placeholder="Score %"
+                )
                 if val.strip() != "":
                     updated_form.append(val)
 
@@ -783,32 +795,41 @@ with tab5:
                 save_config()
                 st.rerun()
 
-        # 3. Evaluative Column (Fixes the Bug)
+        # 3. Evaluative Column (Saves by subject & perfectly aligned)
         with col_eval:
             st.markdown(f"### 🚨 Evaluative ({w_eval:.0f}%)")
             eval_list = class_data.get("evaluative", [])
-            
-            # Append empty template for new input row
-            eval_input_list = eval_list + [{"type": "Quiz", "score": ""}]
             updated_eval = []
 
-            for i, item in enumerate(eval_input_list):
-                item_type = item.get("type", "Quiz") if isinstance(item, dict) else "Quiz"
-                item_score = item.get("score", "") if isinstance(item, dict) else str(item)
+            # Prepare list with a blank trailing slot for adding new items
+            eval_input_list = eval_list + [{"type": "Quiz", "score": ""}]
 
+            for i, item in enumerate(eval_input_list):
+                if isinstance(item, dict):
+                    item_type = item.get("type", "Quiz")
+                    item_score = item.get("score", "")
+                else:
+                    item_type = "Quiz"
+                    item_score = str(item)
+
+                # Aligned label header above each row
+                st.caption(f"Evaluative Item #{i+1}")
+                
+                # Single-line horizontal layout for perfect alignment
                 ec1, ec2 = st.columns([0.45, 0.55])
+                
                 e_type = ec1.selectbox(
-                    "Type", 
-                    ["Quiz", "Test", "Project", "Final"], 
+                    f"Type #{i+1}",
+                    ["Quiz", "Test", "Project", "Final"],
                     index=["Quiz", "Test", "Project", "Final"].index(item_type) if item_type in ["Quiz", "Test", "Project", "Final"] else 0,
                     key=f"eval_type_{selected_class}_{i}",
                     label_visibility="collapsed"
                 )
                 e_score = ec2.text_input(
-                    "Score", 
-                    value=str(item_score), 
+                    f"Score #{i+1}",
+                    value=str(item_score),
                     key=f"eval_score_{selected_class}_{i}",
-                    placeholder="Score",
+                    placeholder="Score %",
                     label_visibility="collapsed"
                 )
 
@@ -820,7 +841,7 @@ with tab5:
                 save_config()
                 st.rerun()
 
-        # --- CALCULATE FINAL GRADE SUMMARY ---
+        # --- GRADE OVERVIEW SUMMARY ---
         st.markdown("---")
         st.subheader("📈 Grade Overview")
 
@@ -834,22 +855,21 @@ with tab5:
         g_col2.metric("Formative Avg", f"{avg_form:.1f}%" if avg_form is not None else "N/A")
         g_col3.metric("Evaluative Avg", f"{avg_eval:.1f}%" if avg_eval is not None else "N/A")
 
-        # Weighted calculation based on active categories
-        total_applied_weight = 0.0
-        weighted_score_sum = 0.0
+        total_weight_used = 0.0
+        weighted_sum = 0.0
 
         if avg_daily is not None:
-            weighted_score_sum += avg_daily * (w_daily / 100.0)
-            total_applied_weight += (w_daily / 100.0)
+            weighted_sum += avg_daily * (w_daily / 100.0)
+            total_weight_used += (w_daily / 100.0)
         if avg_form is not None:
-            weighted_score_sum += avg_form * (w_form / 100.0)
-            total_applied_weight += (w_form / 100.0)
+            weighted_sum += avg_form * (w_form / 100.0)
+            total_weight_used += (w_form / 100.0)
         if avg_eval is not None:
-            weighted_score_sum += avg_eval * (w_eval / 100.0)
-            total_applied_weight += (w_eval / 100.0)
+            weighted_sum += avg_eval * (w_eval / 100.0)
+            total_weight_used += (w_eval / 100.0)
 
-        if total_applied_weight > 0:
-            final_grade = weighted_score_sum / total_applied_weight
-            g_col4.metric("Current Overall Grade", f"{final_grade:.2f}%")
+        if total_weight_used > 0:
+            final_grade = weighted_sum / total_weight_used
+            g_col4.metric("Current Grade", f"{final_grade:.2f}%")
         else:
-            g_col4.metric("Current Overall Grade", "N/A")
+            g_col4.metric("Current Grade", "N/A")
