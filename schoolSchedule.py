@@ -704,135 +704,152 @@ with tab5:
     if selected_class:
         st.subheader(f"Grade Breakdown: {selected_class}")
         
+        # Load weights for selected class
         class_weights = st.session_state.grade_weights.get(selected_class, DEFAULT_WEIGHTS.copy())
         
-        with st.expander("⚙️ Customize Category Weights (%) for " + selected_class, expanded=True):
+        with st.expander(f"⚙️ Customize Category Weights (%) for {selected_class}", expanded=False):
             w_col1, w_col2, w_col3 = st.columns(3)
-            w_daily = w_col1.number_input("Daily Work Weight (%)", value=float(class_weights.get("daily", 10.0)), step=1.0)
-            w_form = w_col2.number_input("Formative Weight (%)", value=float(class_weights.get("formative", 20.0)), step=1.0)
-            w_eval = w_col3.number_input("Evaluative Weight (%)", value=float(class_weights.get("evaluative", 70.0)), step=1.0)
+            w_daily = w_col1.number_input("Daily Work Weight (%)", value=float(class_weights.get("daily", 10.0)), step=1.0, key=f"w_d_{selected_class}")
+            w_form = w_col2.number_input("Formative Weight (%)", value=float(class_weights.get("formative", 20.0)), step=1.0, key=f"w_f_{selected_class}")
+            w_eval = w_col3.number_input("Evaluative Weight (%)", value=float(class_weights.get("evaluative", 70.0)), step=1.0, key=f"w_e_{selected_class}")
             
             total_w = w_daily + w_form + w_eval
             if total_w != 100.0:
-                st.warning(f"⚠️ Total weight equals {total_w:.1f}%. (It should ideally equal 100%)")
+                st.warning(f"⚠️ Total weight equals {total_w:.1f}%. (Should total 100%)")
             
-            st.session_state.grade_weights[selected_class] = {
-                "daily": w_daily,
-                "formative": w_form,
-                "evaluative": w_eval
-            }
+            if st.button("Save Weights for Class", key=f"save_w_{selected_class}"):
+                st.session_state.grade_weights[selected_class] = {
+                    "daily": w_daily,
+                    "formative": w_form,
+                    "evaluative": w_eval
+                }
+                save_config()
+                st.success("Weights updated successfully!")
+                st.rerun()
 
+        # Initialize default grades for selected class if missing
         if selected_class not in st.session_state.grades:
             st.session_state.grades[selected_class] = {
-                "daily": [""],
-                "formative": [""],
-                "evaluative": [{"type": "Quiz", "score": ""}]
+                "daily": [],
+                "formative": [],
+                "evaluative": []
             }
 
         class_data = st.session_state.grades[selected_class]
 
         col_daily, col_form, col_eval = st.columns(3)
 
-        # 1. Daily Grades
+        # Helper function to compute average scores
+        def calculate_avg(scores_list):
+            valid_scores = []
+            for item in scores_list:
+                val = item.get("score") if isinstance(item, dict) else item
+                try:
+                    if str(val).strip() != "":
+                        valid_scores.append(float(val))
+                except ValueError:
+                    pass
+            return sum(valid_scores) / len(valid_scores) if valid_scores else None
+
+        # 1. Daily Work Column
         with col_daily:
             st.markdown(f"### 📅 Daily Work ({w_daily:.0f}%)")
-            daily_list = class_data.get("daily", [""])
-            if not daily_list or daily_list[-1] != "":
-                daily_list.append("")
-            
+            daily_list = class_data.get("daily", [])
             updated_daily = []
-            for i, score in enumerate(daily_list):
-                val = st.text_input(
-                    f"Daily #{i+1}", 
-                    value=str(score) if score != "" else "", 
-                    key=f"daily_{selected_class}_{i}",
-                    placeholder="e.g. 95"
-                )
-                if val.strip() != "":
-                    try:
-                        updated_daily.append(float(val))
-                    except ValueError:
-                        st.error("Enter a number")
             
-            class_data["daily"] = updated_daily
+            for i, score in enumerate(daily_list + [""]):
+                val = st.text_input(f"Score #{i+1}", value=str(score), key=f"daily_{selected_class}_{i}")
+                if val.strip() != "":
+                    updated_daily.append(val)
 
-        # 2. Formative Grades
+            if updated_daily != daily_list:
+                st.session_state.grades[selected_class]["daily"] = updated_daily
+                save_config()
+                st.rerun()
+
+        # 2. Formative Assessments Column
         with col_form:
-            st.markdown(f"### 📝 Formative / HW ({w_form:.0f}%)")
-            form_list = class_data.get("formative", [""])
-            if not form_list or form_list[-1] != "":
-                form_list.append("")
-            
+            st.markdown(f"### 📝 Formative ({w_form:.0f}%)")
+            form_list = class_data.get("formative", [])
             updated_form = []
-            for i, score in enumerate(form_list):
-                val = st.text_input(
-                    f"HW/Formative #{i+1}", 
-                    value=str(score) if score != "" else "", 
-                    key=f"form_{selected_class}_{i}",
-                    placeholder="e.g. 88"
-                )
+            
+            for i, score in enumerate(form_list + [""]):
+                val = st.text_input(f"Score #{i+1}", value=str(score), key=f"form_{selected_class}_{i}")
                 if val.strip() != "":
-                    try:
-                        updated_form.append(float(val))
-                    except ValueError:
-                        st.error("Enter a number")
+                    updated_form.append(val)
 
-            class_data["formative"] = updated_form
+            if updated_form != form_list:
+                st.session_state.grades[selected_class]["formative"] = updated_form
+                save_config()
+                st.rerun()
 
-        # 3. Evaluative Grades
+        # 3. Evaluative Column (Fixes the Bug)
         with col_eval:
             st.markdown(f"### 🚨 Evaluative ({w_eval:.0f}%)")
-            st.caption("Tests weight 2x compared to Quizzes")
-            
-            # Read existing evaluative list
             eval_list = class_data.get("evaluative", [])
             
-            # Ensure there is always one trailing blank row for new entry
-            if not eval_list or (eval_list[-1].get("score") != "" and eval_list[-1].get("score") is not None):
-                eval_list.append({"type": "Quiz", "score": ""})
-
+            # Append empty template for new input row
+            eval_input_list = eval_list + [{"type": "Quiz", "score": ""}]
             updated_eval = []
-            for i, item in enumerate(eval_list):
-                c_type, c_score = st.columns([0.4, 0.6])
-                
-                # Fetch key values safely
-                curr_type = item.get("type", "Quiz")
-                curr_score = item.get("score", "")
 
-                e_type = c_type.selectbox(
+            for i, item in enumerate(eval_input_list):
+                item_type = item.get("type", "Quiz") if isinstance(item, dict) else "Quiz"
+                item_score = item.get("score", "") if isinstance(item, dict) else str(item)
+
+                ec1, ec2 = st.columns([0.45, 0.55])
+                e_type = ec1.selectbox(
                     "Type", 
-                    ["Quiz", "Test"], 
-                    index=0 if curr_type == "Quiz" else 1,
+                    ["Quiz", "Test", "Project", "Final"], 
+                    index=["Quiz", "Test", "Project", "Final"].index(item_type) if item_type in ["Quiz", "Test", "Project", "Final"] else 0,
                     key=f"eval_type_{selected_class}_{i}",
                     label_visibility="collapsed"
                 )
-                
-                e_val = c_score.text_input(
-                    f"Eval #{i+1}", 
-                    value=str(curr_score) if curr_score != "" else "", 
+                e_score = ec2.text_input(
+                    "Score", 
+                    value=str(item_score), 
                     key=f"eval_score_{selected_class}_{i}",
-                    placeholder="Grade",
+                    placeholder="Score",
                     label_visibility="collapsed"
                 )
-                
-                if e_val.strip() != "":
-                    try:
-                        updated_eval.append({"type": e_type, "score": float(e_val)})
-                    except ValueError:
-                        st.error("Enter a number")
-                else:
-                    # Keep blank field representation so the row doesn't collapse while typing
-                    updated_eval.append({"type": e_type, "score": ""})
 
-            # Explicitly force-update state dictionary for the current selected class
-            st.session_state.grades[selected_class]["evaluative"] = updated_eval
+                if e_score.strip() != "":
+                    updated_eval.append({"type": e_type, "score": e_score})
 
-        # Filter completed numeric evaluative scores for calculation
-        eval_items = [
-            e for e in st.session_state.grades[selected_class]["evaluative"] 
-            if isinstance(e.get("score"), (int, float))
-        ]
-        
-        weighted_eval_sum = sum(e["score"] * (2 if e["type"] == "Test" else 1) for e in eval_items)
-        weighted_eval_count = sum(2 if e["type"] == "Test" else 1 for e in eval_items)
-        eval_avg = weighted_eval_sum / weighted_eval_count if weighted_eval_count > 0 else None
+            if updated_eval != eval_list:
+                st.session_state.grades[selected_class]["evaluative"] = updated_eval
+                save_config()
+                st.rerun()
+
+        # --- CALCULATE FINAL GRADE SUMMARY ---
+        st.markdown("---")
+        st.subheader("📈 Grade Overview")
+
+        avg_daily = calculate_avg(st.session_state.grades[selected_class].get("daily", []))
+        avg_form = calculate_avg(st.session_state.grades[selected_class].get("formative", []))
+        avg_eval = calculate_avg(st.session_state.grades[selected_class].get("evaluative", []))
+
+        g_col1, g_col2, g_col3, g_col4 = st.columns(4)
+
+        g_col1.metric("Daily Avg", f"{avg_daily:.1f}%" if avg_daily is not None else "N/A")
+        g_col2.metric("Formative Avg", f"{avg_form:.1f}%" if avg_form is not None else "N/A")
+        g_col3.metric("Evaluative Avg", f"{avg_eval:.1f}%" if avg_eval is not None else "N/A")
+
+        # Weighted calculation based on active categories
+        total_applied_weight = 0.0
+        weighted_score_sum = 0.0
+
+        if avg_daily is not None:
+            weighted_score_sum += avg_daily * (w_daily / 100.0)
+            total_applied_weight += (w_daily / 100.0)
+        if avg_form is not None:
+            weighted_score_sum += avg_form * (w_form / 100.0)
+            total_applied_weight += (w_form / 100.0)
+        if avg_eval is not None:
+            weighted_score_sum += avg_eval * (w_eval / 100.0)
+            total_applied_weight += (w_eval / 100.0)
+
+        if total_applied_weight > 0:
+            final_grade = weighted_score_sum / total_applied_weight
+            g_col4.metric("Current Overall Grade", f"{final_grade:.2f}%")
+        else:
+            g_col4.metric("Current Overall Grade", "N/A")
