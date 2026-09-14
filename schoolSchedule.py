@@ -704,7 +704,6 @@ with tab5:
     if selected_class:
         st.subheader(f"Grade Breakdown: {selected_class}")
         
-        # Ensure class weight configuration exists in session state
         if selected_class not in st.session_state.grade_weights:
             st.session_state.grade_weights[selected_class] = DEFAULT_WEIGHTS.copy()
             
@@ -730,7 +729,6 @@ with tab5:
                 st.success("Weights updated successfully!")
                 st.rerun()
 
-        # Ensure class grade structure exists
         if selected_class not in st.session_state.grades:
             st.session_state.grades[selected_class] = {
                 "daily": [],
@@ -761,7 +759,7 @@ with tab5:
 
             for i, score in enumerate(daily_list + [""]):
                 val = st.text_input(
-                    f"Daily Score #{i+1}", 
+                    f"Item #{i+1}", 
                     value=str(score), 
                     key=f"daily_in_{selected_class}_{i}",
                     placeholder="Score %"
@@ -782,7 +780,7 @@ with tab5:
 
             for i, score in enumerate(form_list + [""]):
                 val = st.text_input(
-                    f"Formative Score #{i+1}", 
+                    f"Item #{i+1}", 
                     value=str(score), 
                     key=f"form_in_{selected_class}_{i}",
                     placeholder="Score %"
@@ -795,13 +793,12 @@ with tab5:
                 save_config()
                 st.rerun()
 
-        # 3. Evaluative Column (Saves by subject & perfectly aligned)
+        # 3. Evaluative Column (Saves by subject & pixel-aligned with Daily/Formative)
         with col_eval:
             st.markdown(f"### 🚨 Evaluative ({w_eval:.0f}%)")
             eval_list = class_data.get("evaluative", [])
             updated_eval = []
 
-            # Prepare list with a blank trailing slot for adding new items
             eval_input_list = eval_list + [{"type": "Quiz", "score": ""}]
 
             for i, item in enumerate(eval_input_list):
@@ -812,25 +809,21 @@ with tab5:
                     item_type = "Quiz"
                     item_score = str(item)
 
-                # Aligned label header above each row
-                st.caption(f"Evaluative Item #{i+1}")
-                
-                # Single-line horizontal layout for perfect alignment
-                ec1, ec2 = st.columns([0.45, 0.55])
+                # Match the exact height of standard inputs by giving columns vertical alignment
+                ec1, ec2 = st.columns([0.45, 0.55], vertical_alignment="bottom")
                 
                 e_type = ec1.selectbox(
-                    f"Type #{i+1}",
+                    f"Item #{i+1}",
                     ["Quiz", "Test", "Project", "Final"],
                     index=["Quiz", "Test", "Project", "Final"].index(item_type) if item_type in ["Quiz", "Test", "Project", "Final"] else 0,
-                    key=f"eval_type_{selected_class}_{i}",
-                    label_visibility="collapsed"
+                    key=f"eval_type_{selected_class}_{i}"
                 )
                 e_score = ec2.text_input(
                     f"Score #{i+1}",
                     value=str(item_score),
                     key=f"eval_score_{selected_class}_{i}",
                     placeholder="Score %",
-                    label_visibility="collapsed"
+                    label_visibility="hidden"
                 )
 
                 if e_score.strip() != "":
