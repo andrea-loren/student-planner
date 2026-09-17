@@ -25,17 +25,15 @@ def load_sheet_data(worksheet_name):
         return pd.DataFrame()
 
 def save_sheet_data(worksheet_name, df):
-    # Ensure all data values are clean strings to prevent JSON payload formatting errors
+    # Ensure all data values are clean strings
     clean_df = df.astype(str)
     
-    # Clear the worksheet first so existing dimensions don't cause write conflicts
     try:
-        conn.clear(worksheet=worksheet_name)
-    except Exception:
-        pass
-        
-    conn.update(worksheet=worksheet_name, data=clean_df)
-    st.cache_data.clear()
+        # Overwrite starting from cell A1 directly without wiping the sheet first
+        conn.update(worksheet=worksheet_name, data=clean_df)
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Failed to update Google Sheet '{worksheet_name}': {e}")
 
 # --- DEFAULT DEFAULTS ---
 DEFAULT_CLASSES = [
