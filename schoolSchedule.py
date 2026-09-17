@@ -5,8 +5,27 @@ import uuid
 import pandas as pd
 import streamlit as st
 from datetime import datetime, date, timedelta
+from streamlit_gsheets import GSheetsConnection
 
-st.set_page_config(page_title="Student Rotation Planner", layout="wide")
+# Connect to Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Helper to read from Google Sheets
+def load_sheet_data(worksheet_name):
+    return conn.read(worksheet=worksheet_name, ttl=0)
+
+# Helper to save to Google Sheets
+def save_sheet_data(worksheet_name, df):
+    conn.update(worksheet=worksheet_name, data=df)
+    st.cache_data.clear()
+
+# Load tasks from Google Sheets on startup
+if "tasks_df" not in st.session_state:
+    try:
+        st.session_state.tasks_df = load_sheet_data("Tasks")
+    except Exception:
+        # Fallback empty dataframe if sheet is empty
+        st.session_state.tasks_df = pd.DataFrame(columns=["Task", "Class", "Status"])
 
 # --- DATA PERSISTENCE SETUP ---
 DATA_DIR = "data"
