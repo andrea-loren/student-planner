@@ -25,7 +25,16 @@ def load_sheet_data(worksheet_name):
         return pd.DataFrame()
 
 def save_sheet_data(worksheet_name, df):
-    conn.update(worksheet=worksheet_name, data=df)
+    # Ensure all data values are clean strings to prevent JSON payload formatting errors
+    clean_df = df.astype(str)
+    
+    # Clear the worksheet first so existing dimensions don't cause write conflicts
+    try:
+        conn.clear(worksheet=worksheet_name)
+    except Exception:
+        pass
+        
+    conn.update(worksheet=worksheet_name, data=clean_df)
     st.cache_data.clear()
 
 # --- DEFAULT DEFAULTS ---
