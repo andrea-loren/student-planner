@@ -7,6 +7,13 @@ import streamlit as st
 from datetime import datetime, date, timedelta
 from streamlit_gsheets import GSheetsConnection
 
+# MUST be the first Streamlit command to expand layout back to full width
+st.set_page_config(
+    page_title="Student Rotation Planner",
+    page_icon="🎓",
+    layout="wide"
+)
+
 # Connect to Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
