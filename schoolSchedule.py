@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # Connect to Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection, connection_type="service_account")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- GOOGLE SHEETS DATA HELPERS ---
 def load_sheet_data(worksheet_name):
