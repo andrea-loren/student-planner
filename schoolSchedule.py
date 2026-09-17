@@ -10,30 +10,18 @@ from streamlit_gsheets import GSheetsConnection
 # Connect to Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Helper to read from Google Sheets
+# --- GOOGLE SHEETS DATA HELPERS ---
 def load_sheet_data(worksheet_name):
-    return conn.read(worksheet=worksheet_name, ttl=0)
+    try:
+        return conn.read(worksheet=worksheet_name, ttl=0)
+    except Exception:
+        return pd.DataFrame()
 
-# Helper to save to Google Sheets
 def save_sheet_data(worksheet_name, df):
     conn.update(worksheet=worksheet_name, data=df)
     st.cache_data.clear()
 
-# Load tasks from Google Sheets on startup
-if "tasks_df" not in st.session_state:
-    try:
-        st.session_state.tasks_df = load_sheet_data("Tasks")
-    except Exception:
-        # Fallback empty dataframe if sheet is empty
-        st.session_state.tasks_df = pd.DataFrame(columns=["Task", "Class", "Status"])
-
-# --- DATA PERSISTENCE SETUP ---
-DATA_DIR = "data"
-TASKS_FILE = os.path.join(DATA_DIR, "tasks.csv")
-CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
-
-os.makedirs(DATA_DIR, exist_ok=True)
-
+# --- DEFAULT DEFAULTS ---
 DEFAULT_CLASSES = [
     "Advanced Calculus AB", "Honors English", "Advanced Biology", 
     "Advanced Computer Science", "Advanced French", "Philosophy", 
@@ -93,39 +81,36 @@ DEFAULT_CUSTOM_BREAKS = [
     "2027-03-15", "2027-03-16", "2027-03-17", "2027-03-18", "2027-03-19", "2027-03-22", "2027-03-23", "2027-03-24", "2027-03-25", "2027-03-26"
 ]
 
-# --- LOAD CONFIG & SESSION STATE ---
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        config = json.load(f)
-        st.session_state.classes = config.get("classes", DEFAULT_CLASSES)
-        st.session_state.colors = config.get("colors", DEFAULT_COLORS)
-        st.session_state.timetable = config.get("timetable", DEFAULT_TIMETABLE)
-        st.session_state.rooms = config.get("rooms", DEFAULT_ROOMS)
-        st.session_state.blocked_periods = config.get("blocked_periods", {})
-        st.session_state.daily_notes = config.get("daily_notes", {})
-        st.session_state.grades = config.get("grades", {})
-        st.session_state.grade_weights = config.get("grade_weights", {})
-        st.session_state.school_start_date = config.get("school_start_date", DEFAULT_SCHOOL_START)
-        st.session_state.school_end_date = config.get("school_end_date", DEFAULT_SCHOOL_END)
-        st.session_state.cycle_days_count = config.get("cycle_days_count", DEFAULT_CYCLE_DAYS)
-        st.session_state.custom_breaks = config.get("custom_breaks", DEFAULT_CUSTOM_BREAKS)
-else:
-    st.session_state.classes = DEFAULT_CLASSES
-    st.session_state.colors = DEFAULT_COLORS
-    st.session_state.timetable = DEFAULT_TIMETABLE
-    st.session_state.rooms = DEFAULT_ROOMS
-    st.session_state.blocked_periods = {}
-    st.session_state.daily_notes = {}
-    st.session_state.grades = {}
-    st.session_state.grade_weights = {}
-    st.session_state.school_start_date = DEFAULT_SCHOOL_START
-    st.session_state.school_end_date = DEFAULT_SCHOOL_END
-    st.session_state.cycle_days_count = DEFAULT_CYCLE_DAYS
-    st.session_state.custom_breaks = DEFAULT_CUSTOM_BREAKS
+# --- LOAD CONFIG & SESSION STATE FROM GOOGLE SHEETS ---
+config_df = load_sheet_data("Config")
+config = {}
+if not config_df.empty and "Key" in config_df.columns and "Value" in config_df.columns:
+    for _, row in config_df.iterrows():
+        try:
+            config[row["Key"]] = json.loads(row["Value"])
+        except Exception:
+            config[row["Key"]] = row["Value"]
 
+if "classes" not in st.session_state:
+    st.session_state.classes = config.get("classes", DEFAULT_CLASSES)
+    st.session_state.colors = config.get("colors", DEFAULT_COLORS)
+    st.session_state.timetable = config.get("timetable", DEFAULT_TIMETABLE)
+    st.session_state.rooms = config.get("rooms", DEFAULT_ROOMS)
+    st.session_state.blocked_periods = config.get("blocked_periods", {})
+    st.session_state.daily_notes = config.get("daily_notes", {})
+    st.session_state.grades = config.get("grades", {})
+    st.session_state.grade_weights = config.get("grade_weights", {})
+    st.session_state.graded_classes = config.get("graded_classes", [c for c in st.session_state.classes if c not in ["Advanced Photography", "Free Period", "Kairos", "College Counseling", "X-Period", "Extracurricular / Other"]])
+    st.session_state.school_start_date = config.get("school_start_date", DEFAULT_SCHOOL_START)
+    st.session_state.school_end_date = config.get("school_end_date", DEFAULT_SCHOOL_END)
+    st.session_state.cycle_days_count = config.get("cycle_days_count", DEFAULT_CYCLE_DAYS)
+    st.session_state.custom_breaks = config.get("custom_breaks", DEFAULT_CUSTOM_BREAKS)
+
+# Load tasks dataframe from Google Sheets
+tasks_df_raw = load_sheet_data("Tasks")
 if "tasks" not in st.session_state:
-    if os.path.exists(TASKS_FILE):
-        st.session_state.tasks = pd.read_csv(TASKS_FILE)
+    if not tasks_df_raw.empty and "Due Date" in tasks_df_raw.columns:
+        st.session_state.tasks = tasks_df_raw.copy()
         if "id" not in st.session_state.tasks.columns:
             st.session_state.tasks["id"] = [str(uuid.uuid4()) for _ in range(len(st.session_state.tasks))]
         st.session_state.tasks["Due Date"] = pd.to_datetime(st.session_state.tasks["Due Date"]).dt.date
@@ -136,24 +121,31 @@ if "week_offset" not in st.session_state:
     st.session_state.week_offset = 0
 
 def save_config():
-    with open(CONFIG_FILE, "w") as f:
-        json.dump({
-            "classes": st.session_state.classes,
-            "colors": st.session_state.colors,
-            "timetable": st.session_state.timetable,
-            "rooms": st.session_state.rooms,
-            "blocked_periods": st.session_state.blocked_periods,
-            "daily_notes": st.session_state.daily_notes,
-            "grades": st.session_state.get("grades", {}),
-            "grade_weights": st.session_state.get("grade_weights", {}),
-            "school_start_date": st.session_state.school_start_date,
-            "school_end_date": st.session_state.school_end_date,
-            "cycle_days_count": st.session_state.cycle_days_count,
-            "custom_breaks": st.session_state.custom_breaks
-        }, f, indent=4)
+    data_dict = {
+        "classes": st.session_state.classes,
+        "colors": st.session_state.colors,
+        "timetable": st.session_state.timetable,
+        "rooms": st.session_state.rooms,
+        "blocked_periods": st.session_state.blocked_periods,
+        "daily_notes": st.session_state.daily_notes,
+        "grades": st.session_state.get("grades", {}),
+        "grade_weights": st.session_state.get("grade_weights", {}),
+        "graded_classes": st.session_state.get("graded_classes", []),
+        "school_start_date": st.session_state.school_start_date,
+        "school_end_date": st.session_state.school_end_date,
+        "cycle_days_count": st.session_state.cycle_days_count,
+        "custom_breaks": st.session_state.custom_breaks
+    }
+    
+    config_rows = [{"Key": k, "Value": json.dumps(v)} for k, v in data_dict.items()]
+    new_config_df = pd.DataFrame(config_rows)
+    save_sheet_data("Config", new_config_df)
 
 def save_tasks():
-    st.session_state.tasks.to_csv(TASKS_FILE, index=False)
+    tasks_to_save = st.session_state.tasks.copy()
+    if not tasks_to_save.empty and "Due Date" in tasks_to_save.columns:
+        tasks_to_save["Due Date"] = tasks_to_save["Due Date"].astype(str)
+    save_sheet_data("Tasks", tasks_to_save)
 
 def parse_date(d_str):
     if isinstance(d_str, date):
@@ -293,7 +285,7 @@ with tab1:
         </style>
     """, unsafe_allow_html=True)
 
-    # ROW 2: Classes & Room Numbers (Pixel-Perfect Alignment & Edit Dialog)
+    # ROW 2: Classes & Room Numbers
     @st.dialog("Edit Free Period Activity")
     def edit_free_period_modal(block_key, period_time):
         is_blocked = st.session_state.blocked_periods.get(block_key, False)
@@ -565,7 +557,6 @@ with tab4:
 
         st.markdown("**Block Off Holidays & Breaks:**")
         
-        # Holiday picker to easily block off days
         selected_break_days = st.date_input(
             "Select dates to add to Blocked School Breaks",
             value=[],
@@ -613,7 +604,6 @@ with tab4:
         updated_classes = list(st.session_state.classes)
         
         for i, c_name in enumerate(st.session_state.classes):
-            # Align button cleanly with text input by using vertical-alignment adjustment
             c1, c2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
             new_name = c1.text_input(f"Class #{i+1}", value=c_name, key=f"rename_{i}")
             if c2.button("Delete", key=f"del_class_{i}", use_container_width=True):
@@ -658,7 +648,6 @@ with tab4:
     
     schedule_data = []
     for period, days in st.session_state.timetable.items():
-        # Ensure array matches cycle length
         adjusted_days = (days + ["Free Period"] * CYCLE_DAYS)[:CYCLE_DAYS]
         schedule_data.append({"Time": period, **{f"Day {i+1}": adjusted_days[i] for i in range(CYCLE_DAYS)}})
     
@@ -712,11 +701,9 @@ with tab4:
 with tab5:
     st.header("📊 Class Grade Calculator")
 
-    # 1. Manage which classes are included in the Grade Calculator
     with st.expander("⚙️ Manage Graded Classes List", expanded=False):
         st.write("Select which classes should be available in the Grade Calculator:")
         
-        # Initialize inclusion state if not present
         if "graded_classes" not in st.session_state:
             default_excluded = {
                 "Advanced Photography", "Free Period", "Kairos", 
@@ -724,7 +711,6 @@ with tab5:
             }
             st.session_state.graded_classes = [c for c in st.session_state.classes if c not in default_excluded]
 
-        # Multiselect allows adding or removing any class from st.session_state.classes
         updated_graded_classes = st.multiselect(
             "Graded Academic Classes:",
             options=st.session_state.classes,
