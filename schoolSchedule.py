@@ -407,7 +407,7 @@ with tab2:
         with st.form("add_task_form"):
             title = st.text_input("Title (e.g., SAT Prep, Essay Draft, Club Deadline)")
             subject = st.selectbox("Category / Class", st.session_state.classes)
-            task_type = st.selectbox("Type", ["Homework", "Assessment", "Extracurricular / Personal"])
+            task_type = st.selectbox("Type", ["Homework", "Assessment", "Extracurricular / College / Personal"])
             due_date = st.date_input("Due Date", date.today())
             
             if st.form_submit_button("Save Item"):
@@ -478,7 +478,7 @@ with tab2:
 
         render_task_list("Homework", col_hw, "📚 Homework & To-Dos")
         render_task_list("Assessment", col_assess, "🚨 Assessments & Exams")
-        render_task_list("Extracurricular / Personal", col_extra, "🏆 Extracurricular")
+        render_task_list("Extracurricular / College / Personal", col_extra, "🏆 Extracurricular / College / Personal")
 
 # --- TAB 3: POMODORO TIMER ---
 with tab3:
